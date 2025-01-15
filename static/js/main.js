@@ -8,6 +8,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const results = document.getElementById('results');
     const error = document.getElementById('error');
     const errorMessage = document.getElementById('error-message');
+    const previewContainer = document.getElementById('preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const removePreviewBtn = document.getElementById('remove-preview');
+    const processImageBtn = document.getElementById('process-image');
 
     // Handle drag and drop events
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -51,16 +55,66 @@ document.addEventListener('DOMContentLoaded', function() {
         handleFiles(files);
     }
 
+    function validateFile(file) {
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+            throw new Error('Please upload an image file');
+        }
+
+        // Check supported formats
+        const supportedTypes = ['image/jpeg', 'image/png'];
+        if (!supportedTypes.includes(file.type)) {
+            throw new Error('Only JPEG and PNG images are supported');
+        }
+
+        // Check file size (16MB limit)
+        const maxSize = 16 * 1024 * 1024; // 16MB in bytes
+        if (file.size > maxSize) {
+            throw new Error('Image size must be less than 16MB');
+        }
+    }
+
     function handleFiles(files) {
         if (files.length > 0) {
             const file = files[0];
-            if (file.type.startsWith('image/')) {
-                uploadFile(file);
-            } else {
-                showError('Please upload an image file');
+            try {
+                validateFile(file);
+                showPreview(file);
+            } catch (error) {
+                showError(error.message);
             }
         }
     }
+
+    function showPreview(file) {
+        // Hide any previous errors
+        error.classList.add('d-none');
+
+        // Create URL for preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreview.src = e.target.result;
+            previewContainer.classList.remove('d-none');
+            dropZone.classList.add('d-none');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    removePreviewBtn.addEventListener('click', function() {
+        // Clear the preview
+        imagePreview.src = '';
+        previewContainer.classList.add('d-none');
+        dropZone.classList.remove('d-none');
+        fileInput.value = ''; // Reset file input
+    });
+
+    processImageBtn.addEventListener('click', function() {
+        if (fileInput.files.length === 0) {
+            showError('Please select an image first');
+            return;
+        }
+        uploadFile(fileInput.files[0]);
+    });
 
     function uploadFile(file) {
         const formData = new FormData();
@@ -98,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `$${data.prices.lowest_price.toFixed(2)}`;
         document.getElementById('high-price').textContent = 
             `$${data.prices.highest_price.toFixed(2)}`;
-        
+
         results.classList.remove('d-none');
         error.classList.add('d-none');
     }

@@ -22,7 +22,26 @@
                         <div id="drop-zone" class="drop-zone p-5">
                             <i data-feather="upload-cloud" class="mb-3"></i>
                             <p>Drag and drop your image here or click to select</p>
+                            <p class="text-secondary small">Supported formats: PNG, JPEG (Max size: 16MB)</p>
                             <input type="file" id="file-input" class="d-none" accept="image/png,image/jpeg">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Preview Section -->
+                <div id="preview-container" class="card mb-4 d-none">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Image Preview</h5>
+                        <button class="btn btn-sm btn-outline-danger" id="remove-preview">
+                            <i data-feather="x"></i> Remove
+                        </button>
+                    </div>
+                    <div class="card-body text-center">
+                        <img id="image-preview" class="img-fluid mb-3" alt="Preview">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" id="process-image">
+                                <i data-feather="search"></i> Process Image
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -42,7 +61,7 @@
                         <div class="card-body">
                             <h6>Extracted Text:</h6>
                             <p id="extracted-text" class="mb-4"></p>
-                            
+
                             <h6>Price Information:</h6>
                             <div class="row text-center">
                                 <div class="col-md-4">
