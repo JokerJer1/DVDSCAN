@@ -1,87 +1,88 @@
-import pytesseract
-from PIL import Image, ImageEnhance, ImageOps
+import os
+import base64
 import logging
-import numpy as np
+from PIL import Image
+from openai import OpenAI
+from io import BytesIO
 
+# Configure logging
 logger = logging.getLogger(__name__)
 
-def preprocess_image(image):
+# Initialize OpenAI client
+# the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+# do not change this unless explicitly requested by the user
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+def encode_image_to_base64(image_path):
     """
-    Preprocess image to improve OCR accuracy for DVD spine images
+    Convert an image file to base64 string
     """
     try:
-        # Convert to grayscale if not already
-        if image.mode != 'L':
-            image = image.convert('L')
+        with Image.open(image_path) as image:
+            # Convert RGBA to RGB if necessary
+            if image.mode == 'RGBA':
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[3])
+                image = background
 
-        # Resize if the image is too large (preserving aspect ratio)
-        max_dimension = 1200
-        if max(image.size) > max_dimension:
-            ratio = max_dimension / max(image.size)
-            new_size = tuple(int(dim * ratio) for dim in image.size)
-            image = image.resize(new_size, Image.Resampling.LANCZOS)
-
-        # Enhance contrast
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(2.0)
-
-        # Enhance sharpness
-        enhancer = ImageEnhance.Sharpness(image)
-        image = enhancer.enhance(1.5)
-
-        # Denoise
-        image = ImageOps.autocontrast(image, cutoff=2)
-
-        # Binarization with a slightly higher threshold for text
-        image = image.point(lambda x: 0 if x < 140 else 255, '1')
-
-        return image
+            # Save to BytesIO in JPEG format
+            buffered = BytesIO()
+            image.save(buffered, format="JPEG")
+            return base64.b64encode(buffered.getvalue()).decode('utf-8')
     except Exception as e:
-        logger.error(f"Error preprocessing image: {str(e)}")
+        logger.error(f"Error encoding image: {str(e)}")
         return None
 
 def process_image(image_path):
     """
-    Process an image file using Tesseract OCR and return extracted text
+    Process an image file using OpenAI's GPT-4 Vision model to extract text
     Optimized for DVD spine images which typically have vertical text
     """
     try:
-        # Open and verify the image
-        image = Image.open(image_path)
-        if image.mode == 'RGBA':
-            # Convert RGBA to RGB to avoid transparency issues
-            background = Image.new('RGB', image.size, (255, 255, 255))
-            background.paste(image, mask=image.split()[3])
-            image = background
-
-        # Preprocess the image
-        processed_image = preprocess_image(image)
-        if processed_image is None:
-            logger.error("Image preprocessing failed")
+        # Encode image to base64
+        base64_image = encode_image_to_base64(image_path)
+        if not base64_image:
             return None
 
-        # Configure Tesseract parameters
-        # --oem 3: Use LSTM OCR Engine
-        # --psm 5: Assume vertical text
-        # -c parameters to improve text detection
-        custom_config = r'--oem 3 --psm 5 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-:.\' '
-
-        # Extract text using Tesseract
-        text = pytesseract.image_to_string(
-            processed_image,
-            config=custom_config,
-            lang='eng'  # Explicitly specify English language
+        # Create the API request
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert at reading text from DVD spine images. "
+                    "Extract only the title text, ignore any other text or information. "
+                    "Return only the extracted title, nothing else."
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Please read and extract the DVD title from this spine image. "
+                            "The text may be vertical or horizontal."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=100
         )
 
-        # Clean up the extracted text
-        cleaned_text = ' '.join(filter(None, [line.strip() for line in text.split('\n')]))
+        # Extract the text from the response
+        extracted_text = response.choices[0].message.content.strip()
 
-        if not cleaned_text:
+        if not extracted_text:
             logger.warning("No text could be extracted from the image")
             return None
 
-        logger.debug(f"Extracted text: {cleaned_text}")
-        return cleaned_text
+        logger.debug(f"Extracted text: {extracted_text}")
+        return extracted_text
 
     except Exception as e:
         logger.error(f"Error processing image: {str(e)}")
