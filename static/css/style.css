@@ -1,0 +1,31 @@
+.drop-zone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.drop-zone:hover {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.drop-zone.dragover {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.price-card {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: rgba(var(--bs-dark-rgb), 0.2);
+}
+
+.price-card h3 {
+    color: var(--bs-primary);
+    margin-bottom: 0.5rem;
+}
+
+.price-card p {
+    margin-bottom: 0;
+    color: var(--bs-secondary);
+}
