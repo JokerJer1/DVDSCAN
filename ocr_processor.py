@@ -1,7 +1,7 @@
 import os
 import base64
 import logging
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -19,9 +19,10 @@ def process_image(image_path):
         with open(image_path, "rb") as image_file:
             base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
-        # Create the API request
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
         response = client.chat.completions.create(
-            model="gpt-4-vision-preview",  # Use the vision-specific model
+            model="gpt-4o",  # Latest vision-capable model
             messages=[
                 {
                     "role": "system",
@@ -62,6 +63,9 @@ def process_image(image_path):
         logger.debug(f"Extracted text: {extracted_text}")
         return extracted_text
 
+    except OpenAIError as e:
+        logger.error(f"OpenAI API error: {str(e)}")
+        raise Exception(f"OpenAI API error: {str(e)}")
     except Exception as e:
         logger.error(f"Error processing image: {str(e)}")
         return None
