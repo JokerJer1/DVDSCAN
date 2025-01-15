@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
 from ocr_processor import process_image
 from price_lookup import get_watchcount_prices
+from dotenv import load_dotenv
 
 # Configure logging with more detail
 logging.basicConfig(
@@ -13,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "dvd-spine-ocr-secret"
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or "dvd-spine-ocr-secret"
 
 # Configure upload settings
 UPLOAD_FOLDER = '/tmp'
@@ -99,7 +100,9 @@ def process():
         # Get price information
         logger.debug(f"Looking up prices for: {text}")
         try:
-            prices = get_watchcount_prices(text)
+            media_type = text.get('type', 'DVD')  # Get media type from OCR response
+            titles = text.get('titles', '')  # Get titles from OCR response
+            prices = get_watchcount_prices(titles, media_type)
             if 'error' in prices:
                 return jsonify({
                     'status': 'error',
@@ -115,16 +118,8 @@ def process():
 
         # Return successful response
         response_data = {
-            'status': 'success',
-            'data': {
-                'text': text,
-                'prices': {
-                    'average': prices['average_price'],
-                    'lowest': prices['lowest_price'],
-                    'highest': prices['highest_price'],
-                    'results_count': prices['num_results']
-                }
-            }
+            'text': text,
+            'prices': prices  # prices is now a list of dictionaries
         }
 
         return jsonify(response_data)

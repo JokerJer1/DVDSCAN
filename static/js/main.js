@@ -129,11 +129,16 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             processing.classList.add('d-none');
-            if (data.error) {
-                showError(data.error);
+            if (data.error || !data.text) {
+                showError(data.error || 'Failed to process image');
             } else {
                 showResults(data);
             }
@@ -145,14 +150,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showResults(data) {
-        document.getElementById('extracted-text').textContent = data.text;
-        document.getElementById('avg-price').textContent = 
-            `$${data.prices.average_price.toFixed(2)}`;
-        document.getElementById('low-price').textContent = 
-            `$${data.prices.lowest_price.toFixed(2)}`;
-        document.getElementById('high-price').textContent = 
-            `$${data.prices.highest_price.toFixed(2)}`;
-
+        const resultsContainer = document.getElementById('results');
+        const extractedText = document.getElementById('extracted-text');
+        
+        extractedText.textContent = data.text;
+        
+        // Clear previous price cards
+        const priceContainer = document.querySelector('.row.text-center');
+        priceContainer.innerHTML = '';
+        
+        // Create a price card for each title
+        data.prices.forEach(price => {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 mb-3';
+            col.innerHTML = `
+                <div class="price-card">
+                    <h4 class="mb-2">${price.title}</h4>
+                    <p class="text-muted">${price.type}</p>
+                    <div class="price-info">
+                        <p>Average: $${price.average.toFixed(2)}</p>
+                        <p>Lowest: $${price.lowest.toFixed(2)}</p>
+                        <p>Highest: $${price.highest.toFixed(2)}</p>
+                    </div>
+                </div>
+            `;
+            priceContainer.appendChild(col);
+        });
+        
         results.classList.remove('d-none');
         error.classList.add('d-none');
     }

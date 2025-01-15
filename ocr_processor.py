@@ -3,12 +3,14 @@ import base64
 import logging
 import time
 from openai import OpenAI, OpenAIError, RateLimitError
+from dotenv import load_dotenv
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def process_image(image_path, max_retries=3, initial_delay=1):
     """
@@ -27,16 +29,19 @@ def process_image(image_path, max_retries=3, initial_delay=1):
 
             logger.debug("Making API request to OpenAI")
             response = client.chat.completions.create(
-                model="gpt-4-vision-preview",  # Using the correct vision model
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
                         "content": (
-                            "You are an expert at reading DVD spine images. "
-                            "Extract the exact movie title from the spine, ignoring any other text "
-                            "such as studio names, ratings, or technical specifications. "
-                            "Return only the movie title text, nothing else. "
-                            "If you see multiple titles, return them separated by semicolons."
+                            "You are an expert at reading DVD and Blu-ray spine images. "
+                            "Extract the main title and determine the media type. "
+                            "Rules:\n"
+                            "- Remove studio names, ratings, or specifications\n"
+                            "- If multiple titles exist, separate with newlines\n"
+                            "- Determine if it's a DVD or Blu-ray based on visual cues (case color, logos, etc)\n"
+                            "- Return each title followed by media type on same line (e.g., 'Movie Title DVD')\n"
+                            "- Preserve exact spelling and capitalization"
                         )
                     },
                     {
@@ -44,7 +49,7 @@ def process_image(image_path, max_retries=3, initial_delay=1):
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Extract the movie title(s) from this DVD spine image."
+                                "text": "What are the titles and media types from this spine?"
                             },
                             {
                                 "type": "image_url",
@@ -54,20 +59,24 @@ def process_image(image_path, max_retries=3, initial_delay=1):
                             }
                         ]
                     }
-                ],
-                max_tokens=500
+                ]
             )
 
-            # Extract and validate the text from the response
-            extracted_text = response.choices[0].message.content.strip()
-            logger.debug(f"Raw API response text: {extracted_text}")
+            # Parse the response
+            response_text = response.choices[0].message.content.strip()
+            titles_with_types = []
 
-            if not extracted_text:
-                logger.warning("API returned empty text")
-                return None
+            for line in response_text.splitlines():
+                if line.strip():
+                    # Last word should be the media type
+                    parts = line.strip().rsplit(' ', 1)
+                    if len(parts) == 2:
+                        title, media_type = parts
+                        titles_with_types.append(f"{title} {media_type}")
 
-            logger.info(f"Successfully extracted text: {extracted_text}")
-            return extracted_text
+            return {
+                "titles": "\n".join(titles_with_types)
+            }
 
         except RateLimitError as e:
             delay = initial_delay * (2 ** attempt)
