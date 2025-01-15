@@ -72,41 +72,49 @@ def process():
         # Save the uploaded file with secure filename
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Ensure upload directory exists
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
         file.save(filepath)
         logger.debug(f"File saved successfully: {filepath}")
 
         # Process image with OCR
         logger.debug("Starting OCR processing")
-        text = process_image(filepath)
-        if not text:
-            logger.warning("OCR processing failed to extract text")
+        try:
+            text = process_image(filepath)
+            if not text:
+                return jsonify({
+                    'status': 'error',
+                    'error': 'ocr_failed',
+                    'message': 'Could not extract text from the image. Please ensure the image is clear and contains readable text.'
+                }), 422
+        except Exception as ocr_error:
             return jsonify({
                 'status': 'error',
                 'error': 'ocr_failed',
-                'message': 'No text could be extracted from the image'
+                'message': str(ocr_error)
             }), 422
 
         # Get price information
         logger.debug(f"Looking up prices for: {text}")
-        prices = get_watchcount_prices(text)
-        if 'error' in prices:
-            logger.warning(f"Price lookup failed: {prices['error']}")
+        try:
+            prices = get_watchcount_prices(text)
+            if 'error' in prices:
+                return jsonify({
+                    'status': 'error',
+                    'error': 'price_lookup_failed',
+                    'message': prices['error']
+                }), 422
+        except Exception as price_error:
             return jsonify({
                 'status': 'error',
                 'error': 'price_lookup_failed',
-                'message': prices['error']
+                'message': f'Error looking up prices: {str(price_error)}'
             }), 422
 
-        # Clean up the uploaded file
-        try:
-            os.remove(filepath)
-            logger.debug(f"Temporary file removed: {filepath}")
-        except Exception as cleanup_error:
-            logger.error(f"Failed to remove temporary file: {cleanup_error}")
-            # Continue with response despite cleanup failure
-
         # Return successful response
-        return jsonify({
+        response_data = {
             'status': 'success',
             'data': {
                 'text': text,
@@ -117,20 +125,23 @@ def process():
                     'results_count': prices['num_results']
                 }
             }
-        })
+        }
+
+        return jsonify(response_data)
 
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}", exc_info=True)
-        # Clean up file if it exists
-        if 'filepath' in locals():
-            try:
-                os.remove(filepath)
-                logger.debug(f"Cleaned up file after error: {filepath}")
-            except Exception as cleanup_error:
-                logger.error(f"Failed to clean up file after error: {cleanup_error}")
-
+        logger.error(f"Unexpected error processing request: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
             'error': 'processing_failed',
             'message': 'An unexpected error occurred while processing the image'
         }), 500
+
+    finally:
+        # Clean up the uploaded file
+        try:
+            if 'filepath' in locals() and os.path.exists(filepath):
+                os.remove(filepath)
+                logger.debug(f"Temporary file removed: {filepath}")
+        except Exception as cleanup_error:
+            logger.error(f"Failed to clean up temporary file: {cleanup_error}")

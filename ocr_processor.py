@@ -14,22 +14,20 @@ def process_image(image_path, max_retries=3, initial_delay=1):
     """
     Process an image file using OpenAI's GPT-4 Vision model to extract text.
     Optimized for DVD spine images which typically have vertical text.
-
-    Args:
-        image_path: Path to the image file
-        max_retries: Maximum number of retry attempts for rate limit errors
-        initial_delay: Initial delay in seconds between retries
     """
+    if not os.path.exists(image_path):
+        logger.error(f"Image file not found: {image_path}")
+        return None
+
     for attempt in range(max_retries):
         try:
             # Read and encode the image to base64
             with open(image_path, "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
-            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-            # do not change this unless explicitly requested by the user
+            logger.debug("Making API request to OpenAI")
             response = client.chat.completions.create(
-                model="gpt-4o",  # Latest vision-capable model
+                model="gpt-4-vision-preview",  # Using the correct vision model
                 messages=[
                     {
                         "role": "system",
@@ -60,18 +58,19 @@ def process_image(image_path, max_retries=3, initial_delay=1):
                 max_tokens=500
             )
 
-            # Extract the text from the response
+            # Extract and validate the text from the response
             extracted_text = response.choices[0].message.content.strip()
+            logger.debug(f"Raw API response text: {extracted_text}")
 
             if not extracted_text:
-                logger.warning("No text could be extracted from the image")
+                logger.warning("API returned empty text")
                 return None
 
-            logger.debug(f"Extracted text: {extracted_text}")
+            logger.info(f"Successfully extracted text: {extracted_text}")
             return extracted_text
 
         except RateLimitError as e:
-            delay = initial_delay * (2 ** attempt)  # Exponential backoff
+            delay = initial_delay * (2 ** attempt)
             logger.warning(f"Rate limit hit, attempt {attempt + 1}/{max_retries}. Waiting {delay} seconds...")
 
             if attempt < max_retries - 1:
@@ -79,12 +78,12 @@ def process_image(image_path, max_retries=3, initial_delay=1):
                 continue
             else:
                 logger.error("Rate limit retries exhausted")
-                raise Exception("OpenAI API rate limit exceeded. Please try again later.")
+                raise Exception("API rate limit exceeded. Please try again in a few moments.")
 
         except OpenAIError as e:
-            logger.error(f"OpenAI API error: {str(e)}")
-            raise Exception(f"OpenAI API error: {str(e)}")
+            logger.error(f"OpenAI API error: {str(e)}", exc_info=True)
+            raise Exception(f"Error communicating with OpenAI API: {str(e)}")
 
         except Exception as e:
-            logger.error(f"Error processing image: {str(e)}")
+            logger.error(f"Unexpected error processing image: {str(e)}", exc_info=True)
             return None
