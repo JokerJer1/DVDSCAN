@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 from ocr_processor import process_image
 from price_lookup import get_watchcount_prices
@@ -17,7 +17,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or "dvd-spine-ocr-secret"
 
 # Configure upload settings
-UPLOAD_FOLDER = '/tmp'
+UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -140,3 +140,8 @@ def process():
                 logger.debug(f"Temporary file removed: {filepath}")
         except Exception as cleanup_error:
             logger.error(f"Failed to clean up temporary file: {cleanup_error}")
+
+# Add this route for static files
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
